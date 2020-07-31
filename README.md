@@ -20,3 +20,12 @@ with x = 1 or 2 -> Paper followed,
 
 and  z >= 0.5   -> Value of m in Nakagami fading used.
 
+
+
+## Papers Link
+
+Paper 1 - [Link](https://ieeexplore.ieee.org/document/1282377)
+
+Paper 2 - [Link](https://thesai.org/Downloads/Volume6No10/Paper_40-A_Simulation_Model_for_Nakagmi_M_Fading_Channel.pdf)
+
+Reference Paper 3 - [Link](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=823554) as a suggestion for m < 1 values.
