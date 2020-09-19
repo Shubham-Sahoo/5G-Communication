@@ -22,6 +22,7 @@ classdef (Hidden) FadingChannel < matlab.System
 %     ReceiveCorrelationMatrix;
 %     FadingDistribution;
 %     KFactor;
+%     mvalue;
 %     DirectPathDopplerShift;
 %     DirectPathInitialPhase;
 %     Visualization;
@@ -337,7 +338,7 @@ methods(Access = protected)
         obj.pLastThetaLOS = ...
             cast(obj.DirectPathInitialPhase, inDT) / cast(2*pi, inDT) - ...
             cast(obj.DirectPathDopplerShift, inDT) / cast(obj.pSampleRate, inDT);
-        disp("1st");
+        %disp("1st");
     end
         
     % Reset FGN or SOS source
@@ -982,7 +983,7 @@ methods(Access = private) % General methods
     if strcmp(obj.FadingDistribution, 'nakagami')
         % Number of Rician fading links, M or NL
         numRLinks = length(obj.KFactor) * NL; 
-        disp("2nd here");
+        %disp("2nd here");
         if ~obj.pIsStaticChannel
             theta = cast(obj.DirectPathDopplerShift/obj.pSampleRate, inDT);
 
@@ -996,17 +997,25 @@ methods(Access = private) % General methods
 
             % Store last values of phase offsets for next iteration
             obj.pLastThetaLOS = p(end, :);
-
+            
             t = reshape(repmat(exp(1i*2*pi*p), [NL, 1]), [Ns, numRLinks]); % [Ns, numRLinks]
         else
             t = ones(inDT);
         end
-        
-        K = reshape(repmat(cast(obj.KFactor, inDT), [Ns*NL, 1]), ...
+        m = obj.mvalue;
+        if m>=1
+            k_mod = (obj.mvalue-1)+sqrt(obj.mvalue*obj.mvalue-obj.mvalue);
+        else
+            k_mod = 0;
+        end
+        %K = reshape(repmat(cast(obj.KFactor, inDT), [Ns*NL, 1]), ...
+        %    [Ns, numRLinks]); % [Ns, numRLinks]
+        K = reshape(repmat(cast(k_mod, inDT), [Ns*NL, 1]), ...
             [Ns, numRLinks]); % [Ns, numRLinks]
-
-        z(:,1:numRLinks) = (z(:,1:numRLinks) + t.*sqrt(K)) ./ sqrt(K+1);
-        
+        disp("K factor");
+        disp(K(1));
+        z(:,1:numRLinks) = (z(:,1:numRLinks)).*exp(1-m) + ((z(:,1:numRLinks) + t.*sqrt(K)) ./ sqrt(K+1)).*(1-exp(1-m));
+        %z(:,1:numRLinks) = (z(:,1:numRLinks) + t.*sqrt(K)) ./ sqrt(K+1);
     end
     
     % Apply path gains
@@ -1017,7 +1026,7 @@ end
 methods(Access = private) % FNG related methods
   function setupFGN(obj, KI)
     % This method is called only for non-static channels
-    coder.extrinsic('comm.internal.FadingChannel.getGaussianFilterIR');  
+    coder.extrinsic('FadingChannel.getGaussianFilterIR');  
     
     % Use minimum sampling period across all Doppler spectra, corresponding
     % to the largest cutoff frequency. Force all impulse responses to be of
@@ -1028,7 +1037,7 @@ methods(Access = private) % FNG related methods
     t     = -50/(2*pi*fcmin):fgTs:50/(2*pi*fcmin);
 
     obj.pGFilterImpulseResponse = coder.const(...
-        cast(comm.internal.FadingChannel.getGaussianFilterIR( ...
+        cast(FadingChannel.getGaussianFilterIR( ...
         fgTs, fc, t, obj.DopplerSpectrum), obj.pInputDataType));
   end
   

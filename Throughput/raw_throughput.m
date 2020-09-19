@@ -61,7 +61,7 @@
 
 simParameters = [];             % Clear simParameters variable
 simParameters.NFrames = 2;      % Number of 10ms frames
-simParameters.SNRIn = [-10 -5 0 5 10 15];%[-20 -15 -13 -10 -7 -3 0 3 6 10 15]; % SNR range (dB)
+simParameters.SNRIn = [-20 -15 -13 -10 -7 -3 0 3 6 10 15]; % SNR range (dB)
 
 %% Channel Estimator Configuration
 % The logical variable |perfectChannelEstimator| controls channel
@@ -190,6 +190,8 @@ elseif strcmpi(channelType,'TDL')
     channel.NumTransmitAntennas = nTxAnts;
     channel.FadingDistribution = 'nakagami';
     channel.NumReceiveAntennas = nRxAnts;
+    channel.mvalue = 0.5;
+    channel.KFactor = 5;
 else
     error('ChannelType parameter field must be either CDL or TDL.');
 end

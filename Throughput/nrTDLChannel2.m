@@ -333,7 +333,7 @@ classdef (StrictDefaults)nrTDLChannel2 < matlab.System
         %
         %   The default value of this property is 9.0dB.
         KFactor = 9.0;
-        
+        mvalue = 2.0;
         %SampleRate Sample rate (Hz)
         %   Specify the sample rate of the input signal in Hz as a double
         %   precision, real, positive scalar.
@@ -618,6 +618,12 @@ classdef (StrictDefaults)nrTDLChannel2 < matlab.System
             obj.KFactor = val;
         end
         
+        function set.mvalue(obj,val)
+            propName = 'KFactor';
+            validateattributes(val,{'double'},{'real','scalar','finite'},[class(obj) '.' propName],propName);
+            obj.mvalue = val;
+        end
+        
         function set.SampleRate(obj,val)
             propName = 'SampleRate';
             validateattributes(val,{'double'},{'real','scalar','positive','finite'},[class(obj) '.' propName],propName);
@@ -846,6 +852,8 @@ classdef (StrictDefaults)nrTDLChannel2 < matlab.System
                 flag = ~(strcmp(obj.MIMOCorrelation,'Custom') && strcmp(obj.Polarization,'Custom'));
             elseif (strcmp(prop,'KFactor'))
                 flag = strcmp(obj.DelayProfile,'Custom') || ~(obj.KFactorScaling);
+            elseif (strcmp(prop,'mvalue'))
+                flag = strcmp(obj.DelayProfile,'Custom') || ~(obj.KFactorScaling);
             elseif (strcmp(prop,'Seed'))
                 flag = ~strcmp(obj.RandomStream,'mt19937ar with seed');
             elseif (strcmp(prop,'DelaySpread'))
@@ -903,6 +911,7 @@ classdef (StrictDefaults)nrTDLChannel2 < matlab.System
             if (nrTDLChannel2.hasLOSPath(obj))
                 c.FadingDistribution = 'nakagami';
                 c.KFactor = 10^(K_1dB/10); % convert dB to linear
+                c.mvalue = obj.mvalue;
                 c.DirectPathDopplerShift = 0.7*obj.MaximumDopplerShift;
                 c.DirectPathInitialPhase = 0.0;
             %{ 

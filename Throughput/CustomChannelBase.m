@@ -192,10 +192,11 @@ methods(Access = protected)
         'comm:FadingChannel:NoCodegenForVisual');    
   end
   
-  function validateRicianProperties(obj)
+  function validateNakagamiProperties(obj)
     NP = length(obj.PathDelays);
     K = obj.KFactor;
-
+    m = obj.mvalue;
+    
     coder.internal.errorIf(~isscalar(K) && ~isequal(length(K), NP), ...
         'comm:FadingChannel:UnequalKFactorTauLen');
 
@@ -213,6 +214,7 @@ methods(Access = protected)
         coder.internal.warning('comm:FadingChannel:LOSPhaseForStaticChan');
     end      
   end
+  
   
   function s = infoImpl(obj)
     %info Returns characteristic information about the channel

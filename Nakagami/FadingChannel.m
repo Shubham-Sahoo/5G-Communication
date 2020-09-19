@@ -983,7 +983,7 @@ methods(Access = private) % General methods
     if strcmp(obj.FadingDistribution, 'nakagami')
         % Number of Rician fading links, M or NL
         numRLinks = length(obj.KFactor) * NL; 
-        disp("2nd here");
+        %disp("2nd here");
         if ~obj.pIsStaticChannel
             theta = cast(obj.DirectPathDopplerShift/obj.pSampleRate, inDT);
 
@@ -1002,10 +1002,18 @@ methods(Access = private) % General methods
         else
             t = ones(inDT);
         end
-        
-        K = reshape(repmat(cast(obj.KFactor, inDT), [Ns*NL, 1]), ...
-            [Ns, numRLinks]); % [Ns, numRLinks]
         m = obj.mvalue;
+        if m>=1
+            k_mod = (obj.mvalue-1)+sqrt(obj.mvalue*obj.mvalue-obj.mvalue);
+        else
+            k_mod = 0;
+        end
+        %K = reshape(repmat(cast(obj.KFactor, inDT), [Ns*NL, 1]), ...
+        %    [Ns, numRLinks]); % [Ns, numRLinks]
+        K = reshape(repmat(cast(k_mod, inDT), [Ns*NL, 1]), ...
+            [Ns, numRLinks]); % [Ns, numRLinks]
+        disp("K factor");
+        disp(K(1));
         z(:,1:numRLinks) = (z(:,1:numRLinks)).*exp(1-m) + ((z(:,1:numRLinks) + t.*sqrt(K)) ./ sqrt(K+1)).*(1-exp(1-m));
         %z(:,1:numRLinks) = (z(:,1:numRLinks) + t.*sqrt(K)) ./ sqrt(K+1);
     end
