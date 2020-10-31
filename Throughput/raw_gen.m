@@ -61,7 +61,7 @@
 
 simParameters = [];             % Clear simParameters variable
 simParameters.NFrames = 2;      % Number of 10ms frames
-simParameters.SNRIn = (-20:20);%[-20 -15 -13 -10 -7 -3 0 3 6 10 15]; % SNR range (dB)
+simParameters.SNRIn = (-10:40);%(-20:30);%[-20 -15 -13 -10 -7 -3 0 3 6 10 15]; % SNR range (dB)
 
 % Channel Estimator Configuration
 % The logical variable |perfectChannelEstimator| controls channel
@@ -72,7 +72,7 @@ simParameters.SNRIn = (-20:20);%[-20 -15 -13 -10 -7 -3 0 3 6 10 15]; % SNR range
 
 perfectChannelEstimator = false;
 moduls = ["QPSK","16QAM","64QAM","256QAM"];
-code_rates = [120,240,390,490,600,720,770,870,970]./1024;
+code_rates = [120,240,300,390,490,550,620,720,820]./1024;
 for modIdx = 1:numel(moduls)
     for codIdx = 1:numel(code_rates)
         % gNodeB and PDSCH Configuration
@@ -101,8 +101,8 @@ for modIdx = 1:numel(moduls)
         % can be disabled by setting the |SSBTransmitted| field to [0 0 0 0].
 
         % Set waveform type and PDSCH numerology (SCS and CP type)
-        simParameters.NRB = 51;                  % Bandwidth in number of resource blocks (51RBs at 30kHz SCS for 20MHz BW) - 51
-        simParameters.SubcarrierSpacing = 30;    % 15, 30, 60, 120, 240 (kHz) - 30
+        simParameters.NRB = 132;                  % Bandwidth in number of resource blocks (51RBs at 30kHz SCS for 20MHz BW) - 51
+        simParameters.SubcarrierSpacing = 120;    % 15, 30, 60, 120, 240 (kHz) - 30
         simParameters.CyclicPrefix = 'Normal';   % 'Normal' or 'Extended'
         simParameters.NCellID = 1;               % Cell identity
 
@@ -193,8 +193,8 @@ for modIdx = 1:numel(moduls)
             channel.NumTransmitAntennas = nTxAnts;
             channel.FadingDistribution = 'nakagami';
             channel.NumReceiveAntennas = nRxAnts;
-            channel.mvalue = 0.5;
-            channel.KFactor = 5;
+            channel.mvalue = 5;
+            %channel.KFactor = 5;
         else
             error('ChannelType parameter field must be either CDL or TDL.');
         end
@@ -347,9 +347,9 @@ for modIdx = 1:numel(moduls)
             ssbWaveform = [];
 
             SNRdB = snrIn(snrIdx);
-            fprintf('\nSimulating transmission scheme 1 (%dx%d) and SCS=%dkHz with %s channel at %gdB SNR for %d 10ms frame(s)\n',...
-                nTxAnts,nRxAnts,gnb.SubcarrierSpacing, ...
-                channelType,SNRdB,gnb.NFrames); 
+            %fprintf('\nSimulating transmission scheme 1 (%dx%d) and SCS=%dkHz with %s channel at %gdB SNR for %d 10ms frame(s)\n',...
+            %   nTxAnts,nRxAnts,gnb.SubcarrierSpacing, ...
+            %    channelType,SNRdB,gnb.NFrames); 
 
             % Initialize variables used in the simulation and analysis
             bitTput = [];           % Number of successfully received bits per transmission
@@ -585,7 +585,7 @@ for modIdx = 1:numel(moduls)
                 harqProcCntr = harqProcCntr + 1;
 
                 % Display transport block error information per codeword managed by current HARQ process
-                fprintf('\n(%3.2f%%) HARQ Proc %d: ',100*gnb.NSymbol/NSymbols,harqProcIdx);
+                %fprintf('\n(%3.2f%%) HARQ Proc %d: ',100*gnb.NSymbol/NSymbols,harqProcIdx);
                 estrings = {'passed','failed'};
                 rvi = harqProcesses(harqProcIdx).RVIdx; 
                 for cw=1:length(rvi)
@@ -596,7 +596,7 @@ for modIdx = 1:numel(moduls)
                     else
                         ts = sprintf('Retransmission #%d (RV=%d)',cwrvi-1,rvSeq(cwrvi));
                     end
-                    fprintf('CW%d:%s %s. ',cw-1,ts,estrings{1+harqProcesses(harqProcIdx).blkerr(cw)}); 
+                    %fprintf('CW%d:%s %s. ',cw-1,ts,estrings{1+harqProcesses(harqProcIdx).blkerr(cw)}); 
                 end
 
              end
@@ -614,11 +614,11 @@ for modIdx = 1:numel(moduls)
             disp(size(bit_err));
             disp(size(trBlk));
             disp(maxThroughput);
-            thr = maxThroughput(snrIdx);
+            thr = simThroughput(snrIdx);
             disp(thr);
             disp(thr(1));
             
-            disp(thrr);
+            %disp(thrr);
             
             trc = simParameters.PDSCH.TargetCodeRate;
             
@@ -629,7 +629,7 @@ for modIdx = 1:numel(moduls)
                 snrr = cat(1,SNRdB,SNRdB);
                 thrr = cat(1,thr(1),thr(1));
                 berr = cat(1,bit_error(snrIdx),bit_error(snrIdx));
-                csi_ber = cat(2,csi{1,1},berr);
+                csi_ber = cat(2,berr);   %cat(2,csi{1,1},berr);
                 mat_res = cat(2,csi_ber,thrr,snrr,trcc,modll);
                 mat_res = transpose(mat_res);
                 dlmwrite('csi_dataQPSK.csv',mat_res,'-append');
@@ -640,7 +640,7 @@ for modIdx = 1:numel(moduls)
                 snrr = cat(1,SNRdB,SNRdB,SNRdB,SNRdB);
                 thrr = cat(1,thr(1),thr(1),thr(1),thr(1));
                 berr = cat(1,bit_error(snrIdx),bit_error(snrIdx),bit_error(snrIdx),bit_error(snrIdx));
-                csi_ber = cat(2,csi{1,1},berr);
+                csi_ber = cat(2,berr);
                 mat_res = cat(2,csi_ber,thrr,snrr,trcc,modll);
                 mat_res = transpose(mat_res);
                 dlmwrite('csi_data16QAM.csv',mat_res,'-append');
@@ -651,7 +651,7 @@ for modIdx = 1:numel(moduls)
                 snrr = cat(1,SNRdB,SNRdB,SNRdB,SNRdB,SNRdB,SNRdB);
                 thrr = cat(1,thr(1),thr(1),thr(1),thr(1),thr(1),thr(1));
                 berr = cat(1,bit_error(snrIdx),bit_error(snrIdx),bit_error(snrIdx),bit_error(snrIdx),bit_error(snrIdx),bit_error(snrIdx));
-                csi_ber = cat(2,csi{1,1},berr);
+                csi_ber = cat(2,berr);
                 mat_res = cat(2,csi_ber,thrr,snrr,trcc,modll);
                 mat_res = transpose(mat_res);
                 dlmwrite('csi_data64QAM.csv',mat_res,'-append');
@@ -662,7 +662,7 @@ for modIdx = 1:numel(moduls)
                 snrr = cat(1,SNRdB,SNRdB,SNRdB,SNRdB,SNRdB,SNRdB,SNRdB,SNRdB);
                 thrr = cat(1,thr(1),thr(1),thr(1),thr(1),thr(1),thr(1),thr(1),thr(1));
                 berr = cat(1,bit_error(snrIdx),bit_error(snrIdx),bit_error(snrIdx),bit_error(snrIdx),bit_error(snrIdx),bit_error(snrIdx),bit_error(snrIdx),bit_error(snrIdx)    );
-                csi_ber = cat(2,csi{1,1},berr);
+                csi_ber = cat(2,berr);
                 mat_res = cat(2,csi_ber,thrr,snrr,trcc,modll);
                 mat_res = transpose(mat_res);
                 dlmwrite('csi_data256QAM.csv',mat_res,'-append');
@@ -679,16 +679,16 @@ for modIdx = 1:numel(moduls)
         % the maximum possible throughput of the link given the available resources
         % for data transmission.
 
-        %figure();
-        %plot(snrIn,simThroughput*100./maxThroughput,'o-.')
-        %xlabel('SNR (dB)'); ylabel('Throughput (%)'); grid on;
-        %title(sprintf('(%dx%d) / NRB=%d / SCS=%dkHz',...
-        %              nTxAnts,nRxAnts,gnb_init.NRB,gnb_init.SubcarrierSpacing));
-        %figure();
-        %plot(snrIn,log10(bit_error),'o-.') 
+        figure();
+        plot(snrIn,simThroughput*100./maxThroughput,'o-.')
+        xlabel('SNR (dB)'); ylabel('Throughput (%)'); grid on;
+        title(sprintf('(%dx%d) / NRB=%d / SCS=%dkHz',...
+                      nTxAnts,nRxAnts,gnb_init.NRB,gnb_init.SubcarrierSpacing));
+        figure();
+        plot(snrIn,log10(bit_error),'o-.') 
         % Bundle key parameters and results into a combined structure for recording
-        %simResults.simParameters = simParameters;
-        %simResults.simThroughput = simThroughput;
+        simResults.simParameters = simParameters;
+        simResults.simThroughput = simThroughput;
 
         %
         % The figure below shows throughput results obtained simulating 10000
