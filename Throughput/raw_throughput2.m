@@ -61,7 +61,7 @@
 
 simParameters = [];             % Clear simParameters variable
 simParameters.NFrames = 2;      % Number of 10ms frames
-simParameters.SNRIn = [50 100 200 300 400 500 600 700]; %[-20 -15 -13 -10 -7 -3 0 3 6 10 15]; % SNR range (dB)
+simParameters.SNRIn = [5 10 15 20 50 100 200 300 400 500 600 700]; %[-20 -15 -13 -10 -7 -3 0 3 6 10 15]; % SNR range (dB)
 
 %% Channel Estimator Configuration
 % The logical variable |perfectChannelEstimator| controls channel
@@ -117,8 +117,8 @@ if simParameters.PDSCH.NLayers > 4              % Multicodeword transmission
     simParameters.NRxAnts = 8;                            % Number of UE receive antennas
 else
     simParameters.NumCW = 1;                        % Number of codewords
-    simParameters.PDSCH.TargetCodeRate = 308/1024;  % Code rate used to calculate transport block sizes
-    simParameters.PDSCH.Modulation = 'QPSK';       % 'QPSK', '16QAM', '64QAM', '256QAM'
+    simParameters.PDSCH.TargetCodeRate = 700/1024;  % Code rate used to calculate transport block sizes
+    simParameters.PDSCH.Modulation = '64QAM';       % 'QPSK', '16QAM', '64QAM', '256QAM'
     simParameters.NRxAnts = 2;                      % Number of UE receive antennas
 end
 
@@ -140,7 +140,7 @@ simParameters.PDSCH.Reserved.Period = [];       % Periodicity of reserved resour
 simParameters.PDSCH.VRBToPRBInterleaving = 0;   % Disable interleaved resource mapping
 
 % Define the propagation channel type
-simParameters.ChannelType = 'TDL'; % 'CDL' or 'TDL'
+simParameters.ChannelType = 'CDL'; % 'CDL' or 'TDL'
 
 % SS burst configuration
 simParameters.SSBurst.BlockPattern = 'Case B';    % 30kHz subcarrier spacing
@@ -283,7 +283,9 @@ maxThroughput = zeros(length(snrIn),1);
 % For Bit Error Rate Calculation
 bit_error = zeros(length(snrIn),1);
 
-
+pl_los_arr = zeros(length(snrIn),1);
+pl_nlos_arr = zeros(length(snrIn),1);
+pl_arr = zeros(length(snrIn),1);
 % Array to store the simulation throughput for all SNR points
 simThroughput = zeros(length(snrIn),1);
 
@@ -324,336 +326,407 @@ pdsch_init = pdsch;
 ssburst_init = ssburst;
 decodeDLSCH_init = clone(decodeDLSCH);
 
-for snrIdx = 1:numel(snrIn) % comment out for parallel computing
-% parfor snrIdx = 1:numel(snrIn) % uncomment for parallel computing
-% To reduce the total simulation time, you can execute this loop in
-% parallel by using the Parallel Computing Toolbox. Comment out the 'for'
-% statement and uncomment the 'parfor' statement. If the Parallel Computing
-% Toolbox is not installed, 'parfor' defaults to normal 'for' statement
-
-    % Set the random number generator settings to default values
-    rng('default');
-    
-    % Initialize variables for this SNR point, required for initialization
-    % of variables when using the Parallel Computing Toolbox
-    gnb = gnb_init;
-    pdsch = pdsch_init;
-    ssburst = ssburst_init;
-    decodeDLSCH = clone(decodeDLSCH_init);
-    pathFilters = [];
-    ssbWaveform = [];
-    
-    %SNRdB = snrIn(snrIdx);
-    dist_2d = snrIn(snrIdx);
-    fprintf('\nSimulating transmission scheme 1 (%dx%d) and SCS=%dkHz with %s channel at %gm Distance for %d 10ms frame(s)\n',...
-        nTxAnts,nRxAnts,gnb.SubcarrierSpacing, ...
-        channelType,dist_2d,gnb.NFrames); 
-        
-    % Initialize variables used in the simulation and analysis
-    bitTput = [];           % Number of successfully received bits per transmission
-    txedTrBlkSizes = [];    % Number of transmitted info bits per transmission
-    bit_err = [];           % Number of error bits in one cycle
-    % Specify the order in which we cycle through the HARQ processes
-    NHARQProcesses = 16;
-    harqSequence = 1:NHARQProcesses;
-
-    % Initialize the state of all HARQ processes
-    harqProcesses = hNewHARQProcesses(NHARQProcesses,rvSeq,gnb.NumCW);
-    harqProcCntr = 0; % HARQ process counter
-        
-    % Reset the channel so that each SNR point will experience the same
-    % channel realization
-    reset(channel);
-    
-    % Total number of OFDM symbols in the simulation period
-    waveformInfo = hOFDMInfo(gnb);
-    NSymbols = gnb.NFrames * 10 * waveformInfo.SymbolsPerSubframe;
-    
-    % OFDM symbol number associated with start of each PDSCH transmission
-    gnb.NSymbol = 0;
-    
-    % Running counter of the number of PDSCH transmission instances
-    % The simulation will use this counter as the slot number for each
-    % PDSCH
-    pdsch.NSlot = 0;
-    
-    % Index to the start of the current set of SS burst samples to be
-    % transmitted
-    ssbSampleIndex = 1;
-    
-    % Obtain a precoding matrix (wtx) to be used in the transmission of the
-    % first transport block
-    estChannelGrid = getInitialChannelEstimate(gnb,nTxAnts,channel);    
-    newWtx = getPrecodingMatrix(pdsch.PRBSet,pdsch.NLayers,estChannelGrid);
-    
-    % Timing offset, updated in every slot for perfect synchronization and
-    % when the correlation is strong for practical synchronization
-    offset = 0;
-    
-    while gnb.NSymbol < NSymbols  % Move to next slot, gnb.NSymbol increased in steps of one slot               
-        
-        % Generate a new SS burst when necessary
-        if (ssbSampleIndex==1)        
-            nSubframe = gnb.NSymbol / waveformInfo.SymbolsPerSubframe;
-            ssburst.NFrame = floor(nSubframe / 10);
-            ssburst.NHalfFrame = mod(nSubframe / 5,2);
-            [ssbWaveform,~,ssbInfo] = hSSBurst(ssburst);
-        end
-        
-        % Get HARQ process index for the current PDSCH from HARQ index table
-        harqProcIdx = harqSequence(mod(harqProcCntr,length(harqSequence))+1);
-        
-        % Update current HARQ process information (this updates the RV
-        % depending on CRC pass or fail in the previous transmission for
-        % this HARQ process)
-        harqProcesses(harqProcIdx) = hUpdateHARQProcess(harqProcesses(harqProcIdx),gnb.NumCW);
-        
-        % Calculate the transport block sizes for the codewords in the slot
-        [pdschIndices,dmrsIndices,dmrsSymbols,pdschIndicesInfo] = hPDSCHResources(gnb,pdsch);
-        trBlkSizes = hPDSCHTBS(pdsch,pdschIndicesInfo.NREPerPRB-Xoh_PDSCH);
-        
-        % HARQ: check CRC from previous transmission per codeword, i.e. is
-        % a retransmission required?
-        for cwIdx = 1:gnb.NumCW
-            NDI = false;
-            if harqProcesses(harqProcIdx).blkerr(cwIdx) % Errored
-                if (harqProcesses(harqProcIdx).RVIdx(cwIdx)==1) % end of rvSeq
-                    resetSoftBuffer(decodeDLSCH,cwIdx-1,harqProcIdx-1);
-                    NDI = true;
-                end
-            else    % No error
-                NDI = true;
-            end
-            if NDI 
-                trBlk = randi([0 1],trBlkSizes(cwIdx),1);
-                setTransportBlock(encodeDLSCH,trBlk,cwIdx-1,harqProcIdx-1);
-            end
-        end
-                                
-        % Encode the DL-SCH transport blocks
-        codedTrBlock = encodeDLSCH(pdsch.Modulation,pdsch.NLayers,...
-            pdschIndicesInfo.G,harqProcesses(harqProcIdx).RV,harqProcIdx-1);
-
-        % Get wtx (precoding matrix) calculated in previous slot
-        wtx = newWtx;
-        
-        % PDSCH modulation and precoding
-        pdschSymbols = nrPDSCH(codedTrBlock,pdsch.Modulation,pdsch.NLayers,gnb.NCellID,pdsch.RNTI);
-        pdschSymbols = pdschSymbols*wtx;
-        
-        % PDSCH mapping in grid associated with PDSCH transmission period
-        pdschGrid = zeros(waveformInfo.NSubcarriers,waveformInfo.SymbolsPerSlot,nTxAnts);
-        [~,pdschAntIndices] = nrExtractResources(pdschIndices,pdschGrid);
-        pdschGrid(pdschAntIndices) = pdschSymbols;
-        
-        % PDSCH DM-RS precoding and mapping
-        for p = 1:size(dmrsSymbols,2)
-            [~,dmrsAntIndices] = nrExtractResources(dmrsIndices(:,p),pdschGrid);
-            pdschGrid(dmrsAntIndices) = pdschGrid(dmrsAntIndices) + dmrsSymbols(:,p)*wtx(p,:);
-        end
-      
-        % OFDM modulation of associated resource elements
-        txWaveform = hOFDMModulate(gnb, pdschGrid);
-        
-        % Add the appropriate portion of SS burst waveform to the
-        % transmitted waveform
-        Nt = size(txWaveform,1);
-        txWaveform = txWaveform + ssbWaveform(ssbSampleIndex + (0:Nt-1),:);
-        ssbSampleIndex = mod(ssbSampleIndex + Nt,size(ssbWaveform,1));
-
-        % Pass data through channel model. Append zeros at the end of the
-        % transmitted waveform to flush channel content. These zeros take
-        % into account any delay introduced in the channel. This is a mix
-        % of multipath delay and implementation delay. This value may 
-        % change depending on the sampling rate, delay profile and delay
-        % spread
-        txWaveform = [txWaveform; zeros(maxChDelay, size(txWaveform,2))];
-        [rxWaveform,pathGains,sampleTimes] = channel(txWaveform);
-        
-        % Add AWGN to the received time domain waveform
-        % Normalize noise power to take account of sampling rate, which is
-        % a function of the IFFT size used in OFDM modulation. The SNR
-        % is defined per RE for each receive antenna (TS 38.101-4).
-        Power = 200;
-        prob_los = 0.3;
-        prob_nlos = 1-prob_los;
-        
-        h_bs = 25; % in metres
-        h_ut = 22.5;  % in metres
-        
-        
-        if(dist_2d <= 18)
-            g_2d = 0;
-        
-        else
-            g_2d = (5/4)*power(dist_2d/100,3)*exp(-dist_2d/150);  
-        end
-        
-        if(h_ut<13)
-            c_2d = 0;
-        else
-            c_2d = power((h_ut-13)/10,1.5)*g_2d;
-        end
-        
-        h_e = (1/c_2d)*1 + (h_ut-12)*rand(1)+12;
-        
-        h_ut2 = h_ut-h_e;
-        h_bs2 = h_bs-h_e;
-        
-        frequency = 2.8*power(10,9);
-        d_bp = 4*h_ut2*h_bs2*frequency/(3*power(10,8));
-        
-        p_unlos = 13.54+39.08*log10(dist_2d)+20*log10(frequency)-0.6(h_ut-1.5)+normrnd(0,6);
-        if(dist_2d>=10 && dist_2d<d_bp)
-            p_los = 28+22*log10(dist_2d)+20*log10(frequency)+normrnd(0,4);
-            p_nlos = max(p_los,p_unlos);
-        else
-            p_los = 28+40*log10(dist_2d)+20*log10(frequency)-9*log10(power(d_bp,2)+power(h_bs-h_ut,2))+normrnd(0,4);
-            p_nlos = max(p_los,p_unlos);
-        end
-        
-        pl = prob_los*p_los+prob_nlos*p_nlos;
-        
-        %SNR = 10^(SNRdB/20);    % Calculate linear noise gain
-        SNR = Power - 10^(pl/20);
-        N0 = 1/(sqrt(2.0*nRxAnts*double(waveformInfo.Nfft))*SNR); 
-        
-        noise = N0*complex(randn(size(rxWaveform)),randn(size(rxWaveform)));
-        rxWaveform = rxWaveform + noise;
-
-        if (perfectChannelEstimator)
-            % Perfect synchronization. Use information provided by the channel
-            % to find the strongest multipath component
-            pathFilters = getPathFilters(channel); % get path filters for perfect channel estimation
-            [offset,mag] = nrPerfectTimingEstimate(pathGains,pathFilters);
-        else
-            % Practical synchronization. Correlate the received waveform 
-            % with the PDSCH DM-RS to give timing offset estimate 't' and 
-            % correlation magnitude 'mag'. The function
-            % hSkipWeakTimingOffset is used to update the receiver timing
-            % offset. If the correlation peak in 'mag' is weak, the current
-            % timing estimate 't' is ignored and the previous estimate
-            % 'offset' is used
-            [t,mag] = nrTimingEstimate(rxWaveform,gnb.NRB,gnb.SubcarrierSpacing,pdsch.NSlot,dmrsIndices,dmrsSymbols,'CyclicPrefix',gnb.CyclicPrefix); %#ok<UNRCH>
-            offset = hSkipWeakTimingOffset(offset,t,mag);
-        end
-        rxWaveform = rxWaveform(1+offset:end, :);
-
-        % Perform OFDM demodulation on the received data to recreate the
-        % resource grid, including padding in the event that practical
-        % synchronization results in an incomplete slot being demodulated
-        rxGrid = hOFDMDemodulate(gnb, rxWaveform);
-        [K,L,R] = size(rxGrid);
-        if (L < waveformInfo.SymbolsPerSlot)
-            rxGrid = cat(2,rxGrid,zeros(K,waveformInfo.SymbolsPerSlot-L,R));
-        end
-
-        if (perfectChannelEstimator)
-            % Perfect channel estimation, using the value of the path gains
-            % provided by the channel. This channel estimate does not
-            % include the effect of transmitter precoding
-            estChannelGrid = nrPerfectChannelEstimate(pathGains,pathFilters,gnb.NRB,gnb.SubcarrierSpacing,pdsch.NSlot,offset,sampleTimes,gnb.CyclicPrefix);
-
-            % Get perfect noise estimate (from the noise realization)
-            noiseGrid = hOFDMDemodulate(gnb,noise(1+offset:end ,:));
-            noiseEst = var(noiseGrid(:));
-
-            % Get precoding matrix for next slot
-            newWtx = getPrecodingMatrix(pdsch.PRBSet,pdsch.NLayers,estChannelGrid);
-
-            % Apply precoding to estChannelGrid
-            estChannelGrid = precodeChannelEstimate(estChannelGrid,wtx.');
-        else
-            % Practical channel estimation between the received grid and
-            % each transmission layer, using the PDSCH DM-RS for each
-            % layer. This channel estimate includes the effect of
-            % transmitter precoding
-            [estChannelGrid,noiseEst] = nrChannelEstimate(rxGrid,dmrsIndices,dmrsSymbols,'CyclicPrefix',gnb.CyclicPrefix,'CDMLengths',pdschIndicesInfo.CDMLengths); %#ok<UNRCH>
-            
-            % Remove precoding from estChannelGrid prior to precoding
-            % matrix calculation
-            estChannelGridPorts = precodeChannelEstimate(estChannelGrid,conj(wtx));
-            
-            % Get precoding matrix for next slot
-            newWtx = getPrecodingMatrix(pdsch.PRBSet,pdsch.NLayers,estChannelGridPorts);
-        end
-        
-        % Get PDSCH resource elements from the received grid
-        [pdschRx,pdschHest] = nrExtractResources(pdschIndices,rxGrid,estChannelGrid);
-        
-        % Equalization
-        [pdschEq,csi] = nrEqualizeMMSE(pdschRx,pdschHest,noiseEst);
-        
-        % Decode PDSCH physical channel
-        [dlschLLRs,rxSymbols] = nrPDSCHDecode(pdschEq,pdsch.Modulation,gnb.NCellID,pdsch.RNTI,noiseEst);
-
-        % Scale LLRs by CSI
-        csi = nrLayerDemap(csi); % CSI layer demapping
-        for cwIdx = 1:gnb.NumCW
-            Qm = length(dlschLLRs{cwIdx})/length(rxSymbols{cwIdx}); % bits per symbol
-            csi{cwIdx} = repmat(csi{cwIdx}.',Qm,1);   % expand by each bit per symbol
-            dlschLLRs{cwIdx} = dlschLLRs{cwIdx} .* csi{cwIdx}(:);   % scale
-        end
-        
-        % Decode the DL-SCH transport channel
-        decodeDLSCH.TransportBlockLength = trBlkSizes;
-        [decbits,harqProcesses(harqProcIdx).blkerr] = decodeDLSCH(dlschLLRs,pdsch.Modulation,pdsch.NLayers,harqProcesses(harqProcIdx).RV,harqProcIdx-1);
-        % Bit Error Calculation
-        bit_err = [bit_err,sum([decbits~=trBlk])/length(decbits)];
-        % Store values to calculate throughput (only for active PDSCH instances)
-        if(any(trBlkSizes ~= 0))
-            bitTput = [bitTput trBlkSizes.*(1-harqProcesses(harqProcIdx).blkerr)];
-            txedTrBlkSizes = [txedTrBlkSizes trBlkSizes];                         
-        end
-        
-        % Update starting symbol number of next PDSCH transmission
-        gnb.NSymbol = gnb.NSymbol + size(pdschGrid,2);
-        % Update count of overall number of PDSCH transmissions
-        pdsch.NSlot = pdsch.NSlot + 1;
-        % Update HARQ process counter
-        harqProcCntr = harqProcCntr + 1;
-                
-        % Display transport block error information per codeword managed by current HARQ process
-        fprintf('\n(%3.2f%%) HARQ Proc %d: ',100*gnb.NSymbol/NSymbols,harqProcIdx);
-        estrings = {'passed','failed'};
-        rvi = harqProcesses(harqProcIdx).RVIdx; 
-        for cw=1:length(rvi)
-            cwrvi = rvi(cw);
-            % Create a report on the RV state given position in RV sequence and decoding error
-            if cwrvi == 1
-                ts = sprintf('Initial transmission (RV=%d)',rvSeq(cwrvi));
-            else
-                ts = sprintf('Retransmission #%d (RV=%d)',cwrvi-1,rvSeq(cwrvi));
-            end
-            fprintf('CW%d:%s %s. ',cw-1,ts,estrings{1+harqProcesses(harqProcIdx).blkerr(cw)}); 
-        end
-         
-     end
-    
-    % Calculate maximum and simulated throughput
-    maxThroughput(snrIdx) = sum(txedTrBlkSizes); % Max possible throughput
-    simThroughput(snrIdx) = sum(bitTput,2);      % Simulated throughput
-    bit_error(snrIdx) = mean(bit_err);
-    % Display the results dynamically in the command window
-    fprintf([['\n\nThroughput(Mbps) for ', num2str(gnb.NFrames) ' frame(s) '],...
-        '= %.4f\n'], 1e-6*simThroughput(snrIdx)/(gnb.NFrames*10e-3));
-    fprintf(['Throughput(%%) for ', num2str(gnb.NFrames) ' frame(s) = %.4f\n'],...
-        simThroughput(snrIdx)*100/maxThroughput(snrIdx));
-     
+if(dist_2d<=18)
+    prob_los=1;
+    prob_nlos=0;
+else
+    prob_los = (18/dist_2d)+exp(-dist_2d/63)*(1-18/dist_2d);
+    prob_nlos = 1-prob_los;
 end
 
+loop_time = 10;
+pr_fac = prob_los*loop_time;
+for lp = 1:numel(loop_time)
+    
+    
+    for snrIdx = 1:numel(snrIn) % comment out for parallel computing
+    % parfor snrIdx = 1:numel(snrIn) % uncomment for parallel computing
+    % To reduce the total simulation time, you can execute this loop in
+    % parallel by using the Parallel Computing Toolbox. Comment out the 'for'
+    % statement and uncomment the 'parfor' statement. If the Parallel Computing
+    % Toolbox is not installed, 'parfor' defaults to normal 'for' statement
+
+        % Set the random number generator settings to default values
+        rng('default');
+
+        % Initialize variables for this SNR point, required for initialization
+        % of variables when using the Parallel Computing Toolbox
+        gnb = gnb_init;
+        pdsch = pdsch_init;
+        ssburst = ssburst_init;
+        decodeDLSCH = clone(decodeDLSCH_init);
+        pathFilters = [];
+        ssbWaveform = [];
+
+        %SNRdB = snrIn(snrIdx);
+        dist_2d = snrIn(snrIdx);
+        fprintf('\nSimulating transmission scheme 1 (%dx%d) and SCS=%dkHz with %s channel at %gm Distance for %d 10ms frame(s)\n',...
+            nTxAnts,nRxAnts,gnb.SubcarrierSpacing, ...
+            channelType,dist_2d,gnb.NFrames); 
+
+        % Initialize variables used in the simulation and analysis
+        bitTput = [];           % Number of successfully received bits per transmission
+        txedTrBlkSizes = [];    % Number of transmitted info bits per transmission
+        bit_err = [];           % Number of error bits in one cycle
+        % Specify the order in which we cycle through the HARQ processes
+        NHARQProcesses = 16;
+        harqSequence = 1:NHARQProcesses;
+
+        % Initialize the state of all HARQ processes
+        harqProcesses = hNewHARQProcesses(NHARQProcesses,rvSeq,gnb.NumCW);
+        harqProcCntr = 0; % HARQ process counter
+
+        % Reset the channel so that each SNR point will experience the same
+        % channel realization
+        reset(channel);
+
+        % Total number of OFDM symbols in the simulation period
+        waveformInfo = hOFDMInfo(gnb);
+        NSymbols = gnb.NFrames * 10 * waveformInfo.SymbolsPerSubframe;
+
+        % OFDM symbol number associated with start of each PDSCH transmission
+        gnb.NSymbol = 0;
+
+        % Running counter of the number of PDSCH transmission instances
+        % The simulation will use this counter as the slot number for each
+        % PDSCH
+        pdsch.NSlot = 0;
+
+        % Index to the start of the current set of SS burst samples to be
+        % transmitted
+        ssbSampleIndex = 1;
+
+        % Obtain a precoding matrix (wtx) to be used in the transmission of the
+        % first transport block
+        estChannelGrid = getInitialChannelEstimate(gnb,nTxAnts,channel);    
+        newWtx = getPrecodingMatrix(pdsch.PRBSet,pdsch.NLayers,estChannelGrid);
+
+        % Timing offset, updated in every slot for perfect synchronization and
+        % when the correlation is strong for practical synchronization
+        offset = 0;
+
+        while gnb.NSymbol < NSymbols  % Move to next slot, gnb.NSymbol increased in steps of one slot               
+
+            % Generate a new SS burst when necessary
+            if (ssbSampleIndex==1)        
+                nSubframe = gnb.NSymbol / waveformInfo.SymbolsPerSubframe;
+                ssburst.NFrame = floor(nSubframe / 10);
+                ssburst.NHalfFrame = mod(nSubframe / 5,2);
+                [ssbWaveform,~,ssbInfo] = hSSBurst(ssburst);
+            end
+
+            % Get HARQ process index for the current PDSCH from HARQ index table
+            harqProcIdx = harqSequence(mod(harqProcCntr,length(harqSequence))+1);
+
+            % Update current HARQ process information (this updates the RV
+            % depending on CRC pass or fail in the previous transmission for
+            % this HARQ process)
+            harqProcesses(harqProcIdx) = hUpdateHARQProcess(harqProcesses(harqProcIdx),gnb.NumCW);
+
+            % Calculate the transport block sizes for the codewords in the slot
+            [pdschIndices,dmrsIndices,dmrsSymbols,pdschIndicesInfo] = hPDSCHResources(gnb,pdsch);
+            trBlkSizes = hPDSCHTBS(pdsch,pdschIndicesInfo.NREPerPRB-Xoh_PDSCH);
+
+            % HARQ: check CRC from previous transmission per codeword, i.e. is
+            % a retransmission required?
+            for cwIdx = 1:gnb.NumCW
+                NDI = false;
+                if harqProcesses(harqProcIdx).blkerr(cwIdx) % Errored
+                    if (harqProcesses(harqProcIdx).RVIdx(cwIdx)==1) % end of rvSeq
+                        resetSoftBuffer(decodeDLSCH,cwIdx-1,harqProcIdx-1);
+                        NDI = true;
+                    end
+                else    % No error
+                    NDI = true;
+                end
+                if NDI 
+                    trBlk = randi([0 1],trBlkSizes(cwIdx),1);
+                    setTransportBlock(encodeDLSCH,trBlk,cwIdx-1,harqProcIdx-1);
+                end
+            end
+
+            % Encode the DL-SCH transport blocks
+            codedTrBlock = encodeDLSCH(pdsch.Modulation,pdsch.NLayers,...
+                pdschIndicesInfo.G,harqProcesses(harqProcIdx).RV,harqProcIdx-1);
+
+            % Get wtx (precoding matrix) calculated in previous slot
+            wtx = newWtx;
+
+            % PDSCH modulation and precoding
+            pdschSymbols = nrPDSCH(codedTrBlock,pdsch.Modulation,pdsch.NLayers,gnb.NCellID,pdsch.RNTI);
+            pdschSymbols = pdschSymbols*wtx;
+
+            % PDSCH mapping in grid associated with PDSCH transmission period
+            pdschGrid = zeros(waveformInfo.NSubcarriers,waveformInfo.SymbolsPerSlot,nTxAnts);
+            [~,pdschAntIndices] = nrExtractResources(pdschIndices,pdschGrid);
+            pdschGrid(pdschAntIndices) = pdschSymbols;
+
+            % PDSCH DM-RS precoding and mapping
+            for p = 1:size(dmrsSymbols,2)
+                [~,dmrsAntIndices] = nrExtractResources(dmrsIndices(:,p),pdschGrid);
+                pdschGrid(dmrsAntIndices) = pdschGrid(dmrsAntIndices) + dmrsSymbols(:,p)*wtx(p,:);
+            end
+
+            % OFDM modulation of associated resource elements
+            txWaveform = hOFDMModulate(gnb, pdschGrid);
+
+            % Add the appropriate portion of SS burst waveform to the
+            % transmitted waveform
+            Nt = size(txWaveform,1);
+            txWaveform = txWaveform + ssbWaveform(ssbSampleIndex + (0:Nt-1),:);
+            ssbSampleIndex = mod(ssbSampleIndex + Nt,size(ssbWaveform,1));
+
+            % Pass data through channel model. Append zeros at the end of the
+            % transmitted waveform to flush channel content. These zeros take
+            % into account any delay introduced in the channel. This is a mix
+            % of multipath delay and implementation delay. This value may 
+            % change depending on the sampling rate, delay profile and delay
+            % spread
+            txWaveform = [txWaveform; zeros(maxChDelay, size(txWaveform,2))];
+            [rxWaveform,pathGains,sampleTimes] = channel(txWaveform);
+
+            % Add AWGN to the received time domain waveform
+            % Normalize noise power to take account of sampling rate, which is
+            % a function of the IFFT size used in OFDM modulation. The SNR
+            % is defined per RE for each receive antenna (TS 38.101-4).
+            prob_los = 0.3;
+            prob_nlos = 1-prob_los;
+            if(dist_2d<=18)
+                prob_los=1;
+                prob_nlos=0;
+            else
+                prob_los = (18/dist_2d)+exp(-dist_2d/63)*(1-18/dist_2d);
+                prob_nlos = 1-prob_los;
+            end
+            h_bs = 25; % in metres
+            h_ut = 18.5;  % in metres
+
+
+            if(dist_2d <= 18)
+                g_2d = 0;
+
+            else
+                g_2d = (5/4)*power((dist_2d/100),3)*exp((-dist_2d)/150);  
+            end
+
+            if(h_ut<13)
+                c_2d = 0;
+            else
+                c_2d = power((h_ut-13)/10,1.5)*g_2d;
+            end
+
+            h_e = (1/(1+c_2d))*1 + (h_ut-12)*rand(1)+12;
+            G_T=10; G_R=10;
+            h_ut2 = h_ut-h_e;
+            h_bs2 = h_bs-h_e;
+
+            frequency = 2.8;
+            d_bp = (4*h_ut2*h_bs2*frequency)/(3e8);
+
+            m = 1;
+            K = 10^(-2);
+
+            v_LOS = 4;
+            v_NLOS = 6;
+            mu_LOS = log((m^2)/sqrt(v_LOS+m^2));
+            sigma_LOS = sqrt(log(v_LOS/(m^2)+1));
+            x_LOS=lognrnd(mu_LOS,sigma_LOS,1,1);
+
+            mu_NLOS = log((m^2)/sqrt(v_NLOS+m^2));
+            sigma_NLOS = sqrt(log(v_NLOS/(m^2)+1));
+            x_NLOS=lognrnd(mu_NLOS,sigma_NLOS,1,1);
+
+            G_LOS=10*log10(K*x_LOS*z);
+            G_NLOS=10*log10(K*x_NLOS*z);
+
+            dist_3d=sqrt((dist_2d)^2+(h_bs2-h_ut2)^2);
+
+            p_unlos = 13.54+39.08*log10(dist_3d)+20*log10(frequency)-0.6*(h_ut-1.5);
+            if(dist_2d>=10 && dist_2d<d_bp)
+                p_los = 28+22*log10(dist_3d)+20*log10(frequency);
+                p_nlos = max(p_los,p_unlos);
+            else
+                p_los = 28+40*log10(dist_3d)+20*log10(frequency)-9*log10(power(d_bp,2)+power(h_bs-h_ut,2));
+                p_nlos = max(p_los,p_unlos);
+            end
+
+            Tot_gain_LOS  = G_LOS-p_los;
+            Tot_gain_NLOS = G_NLOS-p_nlos;
+
+
+
+            %SNR = 10^(SNRdB/20);    % Calculate linear noise gain
+            %SNR = 10^((46-pl)/20);
+
+            SINR_LOS = ((10^(16/10)/51)*10^(Tot_gain_LOS/10)*G_T*G_R)/(10^-(14.84));      %Considering only the noise PSD -174dBm/Hz, noise power per RB=-148.365dB
+            SINRdB_LOS = 10.*log10(SINR_LOS);
+
+            SINR_NLOS =((10^(16/10)/NRB_tot)*10^(Tot_gain_NLOS/10)*G_T*G_R)/(10^-(14.84));      %Considering only the noise PSD -174dBm/Hz, noise power per RB=-148.365dB
+            SINRdB_NLOS = 10.*log10(SINR_NLOS);
+            
+            if(lp<pr_fac)
+                SINR_TOT = SINR_LOS;
+                SINRdB_TOT = SINRdB_LOS;
+            else
+                SINR_TOT = SINR_NLOS;
+                SINRdB_TOT = SINRdB_NLOS;
+            end
+            
+            
+            pl_los_arr(snrIdx) = pl_los_arr(snrIdx) + SINR_LOS;
+            pl_nlos_arr(snrIdx) = pl_nlos_arr(snrIdx) + SINR_NLOS;
+            pl_arr(snrIdx) = pl_arr(snrIdx) + SINR_TOT;
+
+            %pl = prob_los*p_los+prob_nlos*p_nlos;
+
+            N0 = 1/(sqrt(2.0*nRxAnts*double(waveformInfo.Nfft))*SINR_TOT); 
+
+            noise = N0*complex(randn(size(rxWaveform)),randn(size(rxWaveform)));
+            rxWaveform = rxWaveform + noise;
+
+            if (perfectChannelEstimator)
+                % Perfect synchronization. Use information provided by the channel
+                % to find the strongest multipath component
+                pathFilters = getPathFilters(channel); % get path filters for perfect channel estimation
+                [offset,mag] = nrPerfectTimingEstimate(pathGains,pathFilters);
+            else
+                % Practical synchronization. Correlate the received waveform 
+                % with the PDSCH DM-RS to give timing offset estimate 't' and 
+                % correlation magnitude 'mag'. The function
+                % hSkipWeakTimingOffset is used to update the receiver timing
+                % offset. If the correlation peak in 'mag' is weak, the current
+                % timing estimate 't' is ignored and the previous estimate
+                % 'offset' is used
+                [t,mag] = nrTimingEstimate(rxWaveform,gnb.NRB,gnb.SubcarrierSpacing,pdsch.NSlot,dmrsIndices,dmrsSymbols,'CyclicPrefix',gnb.CyclicPrefix); %#ok<UNRCH>
+                offset = hSkipWeakTimingOffset(offset,t,mag);
+            end
+            rxWaveform = rxWaveform(1+offset:end, :);
+
+            % Perform OFDM demodulation on the received data to recreate the
+            % resource grid, including padding in the event that practical
+            % synchronization results in an incomplete slot being demodulated
+            rxGrid = hOFDMDemodulate(gnb, rxWaveform);
+            [K,L,R] = size(rxGrid);
+            if (L < waveformInfo.SymbolsPerSlot)
+                rxGrid = cat(2,rxGrid,zeros(K,waveformInfo.SymbolsPerSlot-L,R));
+            end
+
+            if (perfectChannelEstimator)
+                % Perfect channel estimation, using the value of the path gains
+                % provided by the channel. This channel estimate does not
+                % include the effect of transmitter precoding
+                estChannelGrid = nrPerfectChannelEstimate(pathGains,pathFilters,gnb.NRB,gnb.SubcarrierSpacing,pdsch.NSlot,offset,sampleTimes,gnb.CyclicPrefix);
+
+                % Get perfect noise estimate (from the noise realization)
+                noiseGrid = hOFDMDemodulate(gnb,noise(1+offset:end ,:));
+                noiseEst = var(noiseGrid(:));
+
+                % Get precoding matrix for next slot
+                newWtx = getPrecodingMatrix(pdsch.PRBSet,pdsch.NLayers,estChannelGrid);
+
+                % Apply precoding to estChannelGrid
+                estChannelGrid = precodeChannelEstimate(estChannelGrid,wtx.');
+            else
+                % Practical channel estimation between the received grid and
+                % each transmission layer, using the PDSCH DM-RS for each
+                % layer. This channel estimate includes the effect of
+                % transmitter precoding
+                [estChannelGrid,noiseEst] = nrChannelEstimate(rxGrid,dmrsIndices,dmrsSymbols,'CyclicPrefix',gnb.CyclicPrefix,'CDMLengths',pdschIndicesInfo.CDMLengths); %#ok<UNRCH>
+
+                % Remove precoding from estChannelGrid prior to precoding
+                % matrix calculation
+                estChannelGridPorts = precodeChannelEstimate(estChannelGrid,conj(wtx));
+
+                % Get precoding matrix for next slot
+                newWtx = getPrecodingMatrix(pdsch.PRBSet,pdsch.NLayers,estChannelGridPorts);
+            end
+
+            % Get PDSCH resource elements from the received grid
+            [pdschRx,pdschHest] = nrExtractResources(pdschIndices,rxGrid,estChannelGrid);
+
+            % Equalization
+            [pdschEq,csi] = nrEqualizeMMSE(pdschRx,pdschHest,noiseEst);
+
+            % Decode PDSCH physical channel
+            [dlschLLRs,rxSymbols] = nrPDSCHDecode(pdschEq,pdsch.Modulation,gnb.NCellID,pdsch.RNTI,noiseEst);
+
+            % Scale LLRs by CSI
+            csi = nrLayerDemap(csi); % CSI layer demapping
+            for cwIdx = 1:gnb.NumCW
+                Qm = length(dlschLLRs{cwIdx})/length(rxSymbols{cwIdx}); % bits per symbol
+                csi{cwIdx} = repmat(csi{cwIdx}.',Qm,1);   % expand by each bit per symbol
+                dlschLLRs{cwIdx} = dlschLLRs{cwIdx} .* csi{cwIdx}(:);   % scale
+            end
+
+            % Decode the DL-SCH transport channel
+            decodeDLSCH.TransportBlockLength = trBlkSizes;
+            [decbits,harqProcesses(harqProcIdx).blkerr] = decodeDLSCH(dlschLLRs,pdsch.Modulation,pdsch.NLayers,harqProcesses(harqProcIdx).RV,harqProcIdx-1);
+            % Bit Error Calculation
+            bit_err = [bit_err,sum([decbits~=trBlk])/length(decbits)];
+            % Store values to calculate throughput (only for active PDSCH instances)
+            if(any(trBlkSizes ~= 0))
+                bitTput = [bitTput trBlkSizes.*(1-harqProcesses(harqProcIdx).blkerr)];
+                txedTrBlkSizes = [txedTrBlkSizes trBlkSizes];                         
+            end
+
+            % Update starting symbol number of next PDSCH transmission
+            gnb.NSymbol = gnb.NSymbol + size(pdschGrid,2);
+            % Update count of overall number of PDSCH transmissions
+            pdsch.NSlot = pdsch.NSlot + 1;
+            % Update HARQ process counter
+            harqProcCntr = harqProcCntr + 1;
+
+            % Display transport block error information per codeword managed by current HARQ process
+            fprintf('\n(%3.2f%%) HARQ Proc %d: ',100*gnb.NSymbol/NSymbols,harqProcIdx);
+            estrings = {'passed','failed'};
+            rvi = harqProcesses(harqProcIdx).RVIdx; 
+            for cw=1:length(rvi)
+                cwrvi = rvi(cw);
+                % Create a report on the RV state given position in RV sequence and decoding error
+                if cwrvi == 1
+                    ts = sprintf('Initial transmission (RV=%d)',rvSeq(cwrvi));
+                else
+                    ts = sprintf('Retransmission #%d (RV=%d)',cwrvi-1,rvSeq(cwrvi));
+                end
+                fprintf('CW%d:%s %s. ',cw-1,ts,estrings{1+harqProcesses(harqProcIdx).blkerr(cw)}); 
+            end
+
+         end
+
+        % Calculate maximum and simulated throughput
+        maxThroughput(snrIdx) = maxThroughput(snrIdx) + sum(txedTrBlkSizes); % Max possible throughput
+        simThroughput(snrIdx) = simThroughput(snrIdx) + sum(bitTput,2);      % Simulated throughput
+        bit_error(snrIdx) = bit_error(snrIdx) + mean(bit_err);
+        % Display the results dynamically in the command window
+        fprintf([['\n\nThroughput(Mbps) for ', num2str(gnb.NFrames) ' frame(s) '],...
+            '= %.4f\n'], 1e-6*simThroughput(snrIdx)/(gnb.NFrames*10e-3));
+        fprintf(['Throughput(%%) for ', num2str(gnb.NFrames) ' frame(s) = %.4f\n'],...
+            simThroughput(snrIdx)*100/maxThroughput(snrIdx));
+
+    end
+
+end
 %% Results
 % Display the measured throughput. This is calculated as the percentage of
 % the maximum possible throughput of the link given the available resources
 % for data transmission.
 
 figure();
-plot(snrIn,simThroughput*100./maxThroughput,'o-.')
+plot(snrIn,simThroughput*100./maxThroughput,'o-.');
 xlabel('SNR (dB)'); ylabel('Throughput (%)'); grid on;
 title(sprintf('(%dx%d) / NRB=%d / SCS=%dkHz',...
               nTxAnts,nRxAnts,gnb_init.NRB,gnb_init.SubcarrierSpacing));
 figure();
-plot(snrIn,log10(bit_error),'o-.') 
+plot(snrIn,log10(bit_error),'o-.');
+figure();
+plot(snrIn,pl_los_arr,'o-.');
+title("Path loss (los) vs distance");
+figure();
+plot(snrIn,pl_nlos_arr,'o-.');
+title("Path loss (nlos) vs distance");
+figure();
+plot(snrIn,pl_arr,'o-.');
+title("Path loss (total) vs distance");
 % Bundle key parameters and results into a combined structure for recording
 simResults.simParameters = simParameters;
 simResults.simThroughput = simThroughput;
@@ -802,5 +875,4 @@ function [mappedPRB,mappedSymbols] = mapNumerology(subcarriers,symbols,nrbs,nrbt
     end
     
 end
-
 
