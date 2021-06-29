@@ -1,0 +1,33 @@
+objects/TAppEncLayerCfg.d.o: \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/App/TAppEncoder/TAppEncLayerCfg.cpp \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/TComRom.h \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/CommonDef.h \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/TypeDef.h \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/App/TAppEncoder/TAppEncCfg.h \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/CommonDef.h \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibEncoder/TEncCfg.h \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/TComSlice.h \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/TComRom.h \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/TComList.h \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/TComChromaFormat.h \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/TComRectangle.h \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/ContextTables.h \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/Debug.h \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/App/TAppEncoder/TAppEncLayerCfg.h \
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TAppCommon/program_options_lite.h
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/App/TAppEncoder/TAppEncLayerCfg.cpp :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/TComRom.h :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/CommonDef.h :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/TypeDef.h :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/App/TAppEncoder/TAppEncCfg.h :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/CommonDef.h :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibEncoder/TEncCfg.h :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/TComSlice.h :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/TComRom.h :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/TComList.h :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/TComChromaFormat.h :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/TComRectangle.h :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/ContextTables.h :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TLibCommon/Debug.h :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/App/TAppEncoder/TAppEncLayerCfg.h :
+ /home/shubham/tags/SHM-12.4/build/linux/app/TAppEncoder/../../../../source/Lib/TAppCommon/program_options_lite.h :

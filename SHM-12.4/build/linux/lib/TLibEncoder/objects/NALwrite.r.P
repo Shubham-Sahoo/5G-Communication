@@ -1,0 +1,15 @@
+objects/NALwrite.r.o: \
+ /home/shubham/tags/SHM-12.4/build/linux/lib/TLibEncoder/../../../../source/Lib/TLibEncoder/NALwrite.cpp \
+ /home/shubham/tags/SHM-12.4/build/linux/lib/TLibEncoder/../../../../source/Lib/TLibCommon/NAL.h \
+ /home/shubham/tags/SHM-12.4/build/linux/lib/TLibEncoder/../../../../source/Lib/TLibCommon/CommonDef.h \
+ /home/shubham/tags/SHM-12.4/build/linux/lib/TLibEncoder/../../../../source/Lib/TLibCommon/TypeDef.h \
+ /home/shubham/tags/SHM-12.4/build/linux/lib/TLibEncoder/../../../../source/Lib/TLibCommon/TComBitStream.h \
+ /home/shubham/tags/SHM-12.4/build/linux/lib/TLibEncoder/../../../../source/Lib/TLibEncoder/NALwrite.h \
+ /home/shubham/tags/SHM-12.4/build/linux/lib/TLibEncoder/../../../../source/Lib/TLibCommon/CommonDef.h
+ /home/shubham/tags/SHM-12.4/build/linux/lib/TLibEncoder/../../../../source/Lib/TLibEncoder/NALwrite.cpp :
+ /home/shubham/tags/SHM-12.4/build/linux/lib/TLibEncoder/../../../../source/Lib/TLibCommon/NAL.h :
+ /home/shubham/tags/SHM-12.4/build/linux/lib/TLibEncoder/../../../../source/Lib/TLibCommon/CommonDef.h :
+ /home/shubham/tags/SHM-12.4/build/linux/lib/TLibEncoder/../../../../source/Lib/TLibCommon/TypeDef.h :
+ /home/shubham/tags/SHM-12.4/build/linux/lib/TLibEncoder/../../../../source/Lib/TLibCommon/TComBitStream.h :
+ /home/shubham/tags/SHM-12.4/build/linux/lib/TLibEncoder/../../../../source/Lib/TLibEncoder/NALwrite.h :
+ /home/shubham/tags/SHM-12.4/build/linux/lib/TLibEncoder/../../../../source/Lib/TLibCommon/CommonDef.h :
